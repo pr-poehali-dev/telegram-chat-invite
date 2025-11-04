@@ -55,7 +55,11 @@ const Index = () => {
     try {
       const response = await fetch(`${API_URL}?action=messages`);
       const data = await response.json();
-      setMessages(data.messages || []);
+      const messages = (data.messages || []).map((msg: any) => ({
+        ...msg,
+        timestamp: parseFloat(msg.timestamp)
+      }));
+      setMessages(messages);
     } catch (error) {
       console.error('Failed to load messages:', error);
     }
@@ -66,7 +70,11 @@ const Index = () => {
     try {
       const response = await fetch(`${API_URL}?action=invitations&userId=${currentUser.id}`);
       const data = await response.json();
-      setInvitations(data.invitations || []);
+      const invitations = (data.invitations || []).map((inv: any) => ({
+        ...inv,
+        timestamp: parseFloat(inv.timestamp)
+      }));
+      setInvitations(invitations);
     } catch (error) {
       console.error('Failed to load invitations:', error);
     }
@@ -103,7 +111,11 @@ const Index = () => {
           })
         });
         const data = await response.json();
-        setMessages([...messages, data.message]);
+        const newMsg = {
+          ...data.message,
+          timestamp: parseFloat(data.message.timestamp)
+        };
+        setMessages([...messages, newMsg]);
         setNewMessage('');
         loadMessages();
       } catch (error) {
@@ -127,7 +139,11 @@ const Index = () => {
           })
         });
         const data = await response.json();
-        setInvitations([...invitations, data.invitation]);
+        const newInv = {
+          ...data.invitation,
+          timestamp: parseFloat(data.invitation.timestamp)
+        };
+        setInvitations([...invitations, newInv]);
         setTelegramUsername('');
         loadInvitations();
       } catch (error) {
