@@ -1,0 +1,32 @@
+{
+  "tests": [
+    {
+      "name": "Получение списка сообщений",
+      "method": "GET",
+      "path": "/?action=messages",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Регистрация пользователя",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "register",
+        "nickname": "TestUser"
+      },
+      "expectedStatus": 200
+    },
+    {
+      "name": "Отправка сообщения",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "send_message",
+        "nickname": "TestUser",
+        "text": "Hello World",
+        "userId": 1
+      },
+      "expectedStatus": 200
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -10,81 +10,137 @@ import { Separator } from '@/components/ui/separator';
 import Icon from '@/components/ui/icon';
 
 interface Message {
-  id: string;
+  id: number;
   nickname: string;
   text: string;
-  timestamp: Date;
+  timestamp: number;
 }
 
 interface Invitation {
-  id: string;
-  telegramUsername: string;
-  inviteLink: string;
+  id: number;
+  telegram_username: string;
+  invite_link: string;
   status: 'pending' | 'accepted';
-  createdAt: Date;
+  timestamp: number;
 }
+
+interface User {
+  id: number;
+  nickname: string;
+}
+
+const API_URL = 'https://functions.poehali.dev/844851c8-3337-4c5f-b232-bab753c8db7d';
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<'landing' | 'app'>('landing');
   const [nickname, setNickname] = useState('');
-  const [currentNickname, setCurrentNickname] = useState('');
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      nickname: 'Космонавт',
-      text: 'Добро пожаловать в анонимный чат! 🚀',
-      timestamp: new Date(Date.now() - 120000)
-    },
-    {
-      id: '2',
-      nickname: 'Путник',
-      text: 'Здесь можно общаться полностью анонимно',
-      timestamp: new Date(Date.now() - 60000)
-    }
-  ]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [telegramUsername, setTelegramUsername] = useState('');
 
-  const handleJoin = () => {
+  useEffect(() => {
+    if (currentView === 'app') {
+      loadMessages();
+      loadInvitations();
+      const interval = setInterval(() => {
+        loadMessages();
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [currentView]);
+
+  const loadMessages = async () => {
+    try {
+      const response = await fetch(`${API_URL}?action=messages`);
+      const data = await response.json();
+      setMessages(data.messages || []);
+    } catch (error) {
+      console.error('Failed to load messages:', error);
+    }
+  };
+
+  const loadInvitations = async () => {
+    if (!currentUser) return;
+    try {
+      const response = await fetch(`${API_URL}?action=invitations&userId=${currentUser.id}`);
+      const data = await response.json();
+      setInvitations(data.invitations || []);
+    } catch (error) {
+      console.error('Failed to load invitations:', error);
+    }
+  };
+
+  const handleJoin = async () => {
     if (nickname.trim()) {
-      setCurrentNickname(nickname);
-      setCurrentView('app');
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'register', nickname: nickname.trim() })
+        });
+        const data = await response.json();
+        setCurrentUser(data.user);
+        setCurrentView('app');
+      } catch (error) {
+        console.error('Failed to register:', error);
+      }
     }
   };
 
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      const message: Message = {
-        id: Date.now().toString(),
-        nickname: currentNickname,
-        text: newMessage,
-        timestamp: new Date()
-      };
-      setMessages([...messages, message]);
-      setNewMessage('');
+  const handleSendMessage = async () => {
+    if (newMessage.trim() && currentUser) {
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'send_message',
+            nickname: currentUser.nickname,
+            text: newMessage.trim(),
+            userId: currentUser.id
+          })
+        });
+        const data = await response.json();
+        setMessages([...messages, data.message]);
+        setNewMessage('');
+        loadMessages();
+      } catch (error) {
+        console.error('Failed to send message:', error);
+      }
     }
   };
 
-  const handleSendInvite = () => {
-    if (telegramUsername.trim()) {
-      const invitation: Invitation = {
-        id: Date.now().toString(),
-        telegramUsername: telegramUsername.replace('@', ''),
-        inviteLink: `https://t.me/share/url?url=${encodeURIComponent(window.location.href)}&text=${encodeURIComponent('Присоединяйся к анонимному чату!')}`,
-        status: 'pending',
-        createdAt: new Date()
-      };
-      setInvitations([...invitations, invitation]);
-      setTelegramUsername('');
+  const handleSendInvite = async () => {
+    if (telegramUsername.trim() && currentUser) {
+      try {
+        const inviteLink = `https://t.me/share/url?url=${encodeURIComponent(window.location.href)}&text=${encodeURIComponent('Присоединяйся к анонимному чату!')}`;
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'send_invite',
+            telegramUsername: telegramUsername.trim(),
+            inviteLink,
+            userId: currentUser.id
+          })
+        });
+        const data = await response.json();
+        setInvitations([...invitations, data.invitation]);
+        setTelegramUsername('');
+        loadInvitations();
+      } catch (error) {
+        console.error('Failed to send invitation:', error);
+      }
     }
   };
 
-  const formatTime = (date: Date) => {
+  const formatTime = (timestamp: number) => {
     return new Intl.DateTimeFormat('ru', {
       hour: '2-digit',
       minute: '2-digit'
-    }).format(date);
+    }).format(new Date(timestamp));
   };
 
   if (currentView === 'landing') {
@@ -152,7 +208,7 @@ const Index = () => {
             </div>
             <div>
               <h1 className="text-lg font-semibold text-foreground">Анонимный чат</h1>
-              <p className="text-xs text-muted-foreground">Вы: {currentNickname}</p>
+              <p className="text-xs text-muted-foreground">Вы: {currentUser?.nickname}</p>
             </div>
           </div>
           <Button
@@ -282,9 +338,9 @@ const Index = () => {
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <p className="font-medium text-foreground">@{invite.telegramUsername}</p>
+                            <p className="font-medium text-foreground">@{invite.telegram_username}</p>
                             <p className="text-xs text-muted-foreground">
-                              {formatTime(invite.createdAt)}
+                              {formatTime(invite.timestamp)}
                             </p>
                           </div>
                         </div>
@@ -309,11 +365,11 @@ const Index = () => {
               <div className="flex flex-col items-center text-center space-y-4">
                 <Avatar className="w-24 h-24 bg-primary/20 border-2 border-primary/30">
                   <AvatarFallback className="bg-transparent text-primary text-3xl font-bold">
-                    {currentNickname.charAt(0).toUpperCase()}
+                    {currentUser?.nickname.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <h2 className="text-2xl font-bold text-foreground">{currentNickname}</h2>
+                  <h2 className="text-2xl font-bold text-foreground">{currentUser?.nickname}</h2>
                   <p className="text-sm text-muted-foreground mt-1">Анонимный пользователь</p>
                 </div>
               </div>
@@ -333,7 +389,17 @@ const Index = () => {
                       className="bg-secondary border-border text-foreground placeholder:text-muted-foreground"
                     />
                     <Button
-                      onClick={() => nickname.trim() && setCurrentNickname(nickname)}
+                      onClick={async () => {
+                        if (nickname.trim()) {
+                          const response = await fetch(API_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'register', nickname: nickname.trim() })
+                          });
+                          const data = await response.json();
+                          setCurrentUser(data.user);
+                        }
+                      }}
                       variant="outline"
                       className="border-border hover:bg-secondary"
                     >
@@ -346,7 +412,7 @@ const Index = () => {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Сообщений отправлено</span>
                     <span className="font-semibold text-foreground">
-                      {messages.filter(m => m.nickname === currentNickname).length}
+                      {messages.filter(m => m.nickname === currentUser?.nickname).length}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
